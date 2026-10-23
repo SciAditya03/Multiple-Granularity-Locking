@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBMS Module 6 — Multiple-Granularity Locking</title>
+<style>
+:root{--ink:#1b2233;--mute:#4d576b;--line:#c9cfdb;--bg:#f6f7f9;--card:#fff;--navy:#1f2a44;--t21:#1d4e89;--t22:#b4530b;--ok:#1d6b3a;--okbg:#e5f3ea;--bad:#9b1c2e;--badbg:#fbe7ea;--wait:#7a5200;--waitbg:#fff1cc;--teach:#2d5a4f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Segoe UI",system-ui,sans-serif}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;color:var(--navy);line-height:1.25;margin:0 0 .5em}
+h1{font-size:1.9rem}h2{font-size:1.45rem}h3{font-size:1.1rem}
+header{background:var(--navy);color:#fff;padding:22px 20px}
+header h1{color:#fff;margin:0 0 4px}header p{margin:0;opacity:.85;max-width:80ch}
+nav{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);display:flex;gap:4px;flex-wrap:wrap;padding:6px 14px;align-items:center}
+nav a{color:var(--navy);text-decoration:none;padding:6px 10px;border-radius:4px;font-size:.92rem}
+nav a:hover,nav a:focus-visible{background:#e8ecf4}
+nav button{margin-left:auto}
+main{max-width:1100px;margin:0 auto;padding:16px}
+section{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px;margin:18px 0}
+.lead{color:var(--mute);max-width:80ch}
+.grid{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:900px){.grid.two{grid-template-columns:2fr 1fr}}
+button,select{font:inherit;color:var(--ink)}
+button{background:#fff;border:1px solid #8a93a6;border-radius:4px;padding:6px 12px;cursor:pointer;transition:background .15s,border-color .15s}
+button:hover{background:#eef1f7}
+button:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #e0a100;outline-offset:2px}
+button.primary{background:var(--navy);color:#fff;border-color:var(--navy)}button.primary:hover{background:#2d3c60}
+button:disabled{opacity:.45;cursor:not-allowed}
+select{padding:5px 8px;border:1px solid #8a93a6;border-radius:4px;background:#fff}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:#fcfcfd}
+svg{display:block;min-width:640px;width:100%;height:auto}
+svg text{font-family:"Segoe UI",system-ui,sans-serif}
+.e{stroke:#9aa3b2;stroke-width:1.5;transition:stroke .3s}.e.path{stroke:var(--navy);stroke-width:3}
+.n{cursor:pointer}.n rect{fill:#fff;stroke:#5b6577;stroke-width:1.5;transition:fill .3s,stroke .3s}
+.n.path rect{fill:#e8eefb;stroke:var(--navy);stroke-width:2}
+.n.sel rect{stroke:#7a1f2b!important;stroke-width:4!important;stroke-dasharray:6 3}
+.n.sel:not([data-t]) rect{fill:#fff0b8}
+.n .t1{font-size:10px;fill:var(--mute)}.n .t2{font-size:14px;font-weight:600;fill:var(--ink)}
+.pill{animation:pin .3s ease}@keyframes pin{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;color:var(--mute);margin:6px 0}
+.sw{display:inline-block;width:26px;height:12px;border-radius:3px;vertical-align:middle;margin-right:5px}
+.msg{border-left:5px solid var(--line);background:#f1f3f8;padding:10px 14px;border-radius:0 4px 4px 0;min-height:48px;margin:8px 0}
+.msg.ok{border-color:var(--ok);background:var(--okbg)}.msg.bad{border-color:var(--bad);background:var(--badbg)}.msg.wait{border-color:var(--wait);background:var(--waitbg)}
+.msg ul{margin:6px 0 0;padding-left:20px}.msg li.f{color:var(--bad)}.msg li.p{color:var(--ok)}
+.badge{display:inline-block;font-weight:700;padding:2px 10px;border-radius:12px;font-size:.85rem}
+.badge.ok{background:var(--ok);color:#fff}.badge.bad{background:var(--bad);color:#fff}.badge.wait{background:var(--wait);color:#fff}
+.teach{border:1px solid #b9d2c9;border-left:5px solid var(--teach);background:#f0f7f4;padding:10px 14px;border-radius:0 4px 4px 0;margin:10px 0;display:none}
+.teach.on{display:block}.teach b{color:var(--teach)}
+table.m{border-collapse:collapse;margin:8px 0}
+.m th,.m td{border:1px solid #7b8498;width:62px;height:44px;text-align:center;font-weight:600}
+.m th{background:#e9edf5}.m td{cursor:pointer;transition:outline .1s}
+.m td.y{background:var(--okbg);color:var(--ok)}.m td.x{background:var(--badbg);color:var(--bad)}
+.m td.pick{outline:4px solid var(--navy);outline-offset:-4px}
+.held{font-size:.92rem;margin:2px 0}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px}
+.rule{border:1px solid var(--line);border-radius:6px;padding:12px;background:#fcfcfd}
+.rule p{margin:.2em 0 .6em}
+.chain{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:4px 0;font-size:.85rem}
+.chip{border:1px solid #6e788d;border-radius:4px;padding:1px 7px;background:#fff;font-weight:600}
+.chain.v .chip{background:var(--okbg);border-color:var(--ok)}.chain.i .chip{background:var(--badbg);border-color:var(--bad)}
+.mk{font-weight:700}.v .mk{color:var(--ok)}.i .mk{color:var(--bad)}
+.ar{color:var(--mute)}
+.lab{display:flex;gap:6px;flex-wrap:wrap}
+.lab .box{border:2px solid #aab2c3;border-radius:6px;padding:8px 14px;min-width:84px;text-align:center;transition:all .3s}
+.lab .box.lk{background:#e8eefb;border-color:var(--navy)}
+.phase{height:10px;border-radius:5px;background:linear-gradient(90deg,var(--ok) 50%,var(--bad) 50%);position:relative;margin:10px 0 4px}
+.phase i{position:absolute;top:-4px;width:6px;height:18px;background:#000;border-radius:3px;transition:left .4s}
+.note{border:1px solid #e0b0b7;background:var(--badbg);padding:10px 14px;border-radius:4px;margin:12px 0}
+.quiz{border-top:2px solid var(--line);margin-top:20px;padding-top:12px}
+.q{margin:10px 0}.q p{margin:.2em 0;font-weight:600}
+.q button{display:block;width:100%;max-width:560px;text-align:left;margin:4px 0}
+.q button.c{background:var(--okbg);border-color:var(--ok)}.q button.w{background:var(--badbg);border-color:var(--bad)}
+.q .fb{font-size:.92rem;color:var(--mute);margin-top:2px}
+footer{color:var(--mute);font-size:.85rem;max-width:1100px;margin:0 auto;padding:0 16px 40px}
+
+.sch{border-collapse:collapse;margin:8px 0;font-size:.9rem;min-width:260px}
+.sch th,.sch td{border:1px solid #7b8498;padding:3px 10px;text-align:left;vertical-align:top}.sch th{background:#e9edf5}
+.sch .lk{color:#1d4e89;font-weight:600}.sch .un{color:#7a1f2b;font-weight:600}.sch .wt{color:var(--wait);font-style:italic}.sch .cm{color:var(--ok);font-weight:600}.sch .op{font-family:Consolas,monospace}
+.out h4{font-family:Georgia,serif;color:var(--navy);margin:18px 0 4px;font-size:1.05rem}
+.flex{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+textarea{width:100%;font:15px Consolas,monospace;padding:8px;border:1px solid #8a93a6;border-radius:4px}
+details.ans{border:1px solid var(--line);border-radius:6px;padding:8px 14px;margin:8px 0;background:#fcfcfd}details.ans summary{cursor:pointer;font-weight:600;color:var(--navy)}
+</style>
+</head>
+<body>
+<header>
+<h1>Multiple-Granularity Locking</h1>
+<p>DBMS Module 6 · Intention lock modes, the compatibility matrix, and the multiple-granularity protocol. Based on <i>Database System Concepts</i>, 7th ed., Silberschatz, Korth &amp; Sudarshan, Section 18.3 (pp. 854–856).</p>
+</header>
+<nav aria-label="Sections">
+<a href="#s1">1 Hierarchy</a><a href="#s2">2 Compatibility</a><a href="#s3">3 Transactions</a><a href="#s4">4 Protocol rules</a><a href="#s5">5 Exam toolkit: 2PL</a>
+<button id="resetAll" title="Reset every demonstration">Reset everything</button>
+</nav>
+<main>
+
+<section id="s1">
+<h2>1. The granularity hierarchy</h2>
+<p class="lead">Data can be locked at different sizes: the whole database, an area, a file, or a single record. Choose a transaction, click a node, pick a mode, and try to acquire the lock.</p>
+<div class="grid two">
+<div>
+<div class="scroll"><svg id="sbTree" viewBox="-12 -24 824 400" role="img" aria-label="Hierarchy tree"></svg></div>
+<div class="legend" aria-label="Lock colours">
+<b>Section colour = lock mode:</b>
+<span><span class="sw" style="background:#2E8B57"></span>IS</span><span><span class="sw" style="background:#C98A00"></span>IX</span><span><span class="sw" style="background:#1D4E89"></span>S</span><span><span class="sw" style="background:#6B3FA0"></span>SIX</span><span><span class="sw" style="background:#B3261E"></span>X</span>
+</div>
+<div class="legend"><span>Lock any node (Database, Area, File, Record) and <b>that node plus every node under it</b> lights up in the lock’s colour. The locked node is strong with a thick border; the nodes beneath are lighter. <b>S, X, SIX</b> = the whole section is really locked (implicit). <b>IS, IX</b> = a lighter tint, meaning “locks of this kind will be taken somewhere below”.</span></div>
+<div class="legend">
+<span><span class="sw" style="background:#fff0b8;border:2px dashed #7a1f2b"></span>selected node (dashed outline)</span>
+<span><span class="sw" style="background:#e8eefb;border:2px solid var(--navy)"></span>path from root</span>
+<span><span class="sw" style="background:var(--t21)"></span>solid pill = explicit lock</span>
+<span><span class="sw" style="border:2px dashed var(--t21)"></span>dashed pill = implicit lock (from an S, SIX or X ancestor)</span>
+</div>
+</div>
+<div>
+<div class="row"><b>Transaction:</b>
+<label><input type="radio" name="sbT" value="T21" checked> T21</label>
+<label><input type="radio" name="sbT" value="T22"> T22</label></div>
+<div class="row"><b>Selected:</b> <span id="sbSel">Fa</span></div>
+<div class="row" id="sbModes" role="group" aria-label="Lock mode"></div>
+<div class="row"><label><input type="checkbox" id="sbAuto" checked> Auto-lock ancestors first (IS/IX, top-down)</label></div>
+<div class="row"><button class="primary" id="sbAcq">Acquire lock</button><button id="sbRel">Release lock</button><button id="sbReset">Reset</button></div>
+<div id="sbHeld"></div>
+</div>
+</div>
+<div id="sbMsg" class="msg" role="status" aria-live="polite">Select a node and a mode. Try locking a record before its parent to see the protocol refuse.</div>
+<div class="teach on"><b>Teaching note.</b> An explicit S or X lock on a node also locks all of its descendants <i>implicitly</i>, so a transaction reading a whole file needs one lock, not one per record. IS, IX and SIX are <i>intention</i> modes: a transaction takes them on ancestors to announce which kind of locks it will take lower down.</div>
+</section>
+
+<section id="s2">
+<h2>2. Lock compatibility matrix</h2>
+<p class="lead">Rows are the lock already held. Columns are the lock being requested. Click a cell, or use the menus.</p>
+<div class="grid two">
+<div>
+<table class="m" id="mx"></table>
+</div>
+<div>
+<div class="row"><label>Held by Transaction A: <select id="mxH"></select></label></div>
+<div class="row"><label>Requested by Transaction B: <select id="mxR"></select></label></div>
+</div>
+</div>
+<div id="mxOut" class="msg" role="status" aria-live="polite"></div>
+<div class="teach on"><b>Teaching note.</b> Compatibility is checked on the <i>same node</i>, between locks held by <i>different</i> transactions. A transaction never conflicts with itself, and locks on different nodes are compared only through the intention locks on their shared ancestors.</div>
+</section>
+
+<section id="s3">
+<h2>3. Transactions T21 and T22</h2>
+<p class="lead">T21 reads record ra2 in file Fa. T22 modifies record ra9 in file Fa. Step through the lock requests from the root to the leaf, then the releases from the leaf back to the root.</p>
+<div class="row"><label>Scenario: <select id="dmSc">
+<option value="A">Textbook: T22 modifies ra9</option>
+<option value="B">Variant (our illustration): T22 modifies ra2, so it must wait</option></select></label></div>
+<div class="grid two">
+<div>
+<div class="scroll"><svg id="dmTree" viewBox="-12 -24 824 400" role="img" aria-label="Demonstration tree"></svg></div>
+</div>
+<div>
+<div class="row"><button id="dmBack">◀ Back</button><button class="primary" id="dmStep">Step ▶</button><button id="dmAuto">Autoplay</button><button id="dmReset">Reset</button></div>
+<div class="held" id="dmCount"></div>
+<div id="dmHeld"></div>
+</div>
+</div>
+<div id="dmMsg" class="msg" role="status" aria-live="polite"></div>
+<div class="row"><button id="dmExplain">Explain this step</button></div>
+<div class="teach" id="dmTeach"></div>
+</section>
+
+<section id="s4">
+<h2>4. The six protocol rules</h2>
+<p class="lead">To lock a node, a transaction Ti must follow these rules (wording paraphrased from the textbook). Green chains are allowed, red chains are not.</p>
+<div class="cards" id="rules"></div>
+<h3 style="margin-top:20px">Top-down locking, bottom-up release, and two-phase behavior</h3>
+<p>Lock DB → A1 → Fa → ra9 in order, then unlock in reverse order. After the first unlock, any new lock request is refused (rule 5).</p>
+<div class="row"><button class="primary" id="chL">Lock next ▼</button><button id="chU">Unlock deepest ▲</button><button id="chR">Reset</button></div>
+<div class="lab" id="chBoxes"></div>
+<div class="phase" aria-hidden="true"><i id="chMark" style="left:0"></i></div>
+<div class="legend"><span>Growing phase (locks only)</span><span style="margin-left:auto">Shrinking phase (unlocks only)</span></div>
+<div id="chMsg" class="msg" role="status" aria-live="polite">Press “Lock next” to begin.</div>
+<div class="note"><b>Deadlocks are still possible.</b> The textbook notes that the protocol enhances concurrency and reduces lock overhead, but, as with two-phase locking, deadlock is possible. Illustration (ours): one transaction holds S on record r1 and wants X on r2, while another holds S on r2 and wants X on r1. Each waits for the other.</div>
+<div class="teach on"><b>Teaching note.</b> The rules go top-down when locking so every ancestor already carries a warning, and bottom-up when unlocking so a warning is never removed while a lock beneath it still depends on it.</div>
+</section>
+
+<section id="s5">
+<h2>5. Exam toolkit: Two-Phase Locking (2PL)</h2>
+<p class="lead">Built for questions that ask: (i) the types of 2PL with an example, (ii) show that 2PL gives a conflict-serializable schedule using L<sub>i</sub>[X] and U<sub>i</sub>[X], and (iii) show that locking without 2PL can give a schedule that is not conflict-serializable. This section covers general 2PL material, separate from the multiple-granularity protocol above.</p>
+
+<h3>(i) Types of 2PL</h3>
+<p><b>Two-phase rule:</b> every transaction has a <i>growing phase</i> (it may only acquire locks) followed by a <i>shrinking phase</i> (it may only release locks). The moment of its last lock acquisition is its <i>lock point</i>. Notation: L<sub>i</sub>[X] = Ti locks X, U<sub>i</sub>[X] = Ti unlocks X.</p>
+<div class="cards">
+<div class="rule"><h3>Basic 2PL</h3><p>Locks are acquired as needed. After the lock point, locks may be released at any time. Guarantees conflict-serializability. Can suffer deadlock, and cascading rollback because uncommitted data may be exposed after an early unlock.</p>
+<div class="chain v"><span class="mk">✓</span><span class="chip">L1[A]</span><span class="ar">→</span><span class="chip">L1[B]</span><span class="ar">→</span><span class="chip">U1[A]</span><span class="ar">→</span><span class="chip">U1[B]</span></div></div>
+<div class="rule"><h3>Conservative (static) 2PL</h3><p>Before executing anything, a transaction locks <i>all</i> items it will use; if it cannot get them all, it waits holding nothing. Deadlock-free, but the read and write sets must be known in advance and concurrency suffers.</p>
+<div class="chain v"><span class="mk">✓</span><span class="chip">L1[A]</span><span class="ar">→</span><span class="chip">L1[B]</span><span class="ar">→</span><span class="chip">R1(A)…W1(B)</span><span class="ar">→</span><span class="chip">U1[A]</span><span class="ar">→</span><span class="chip">U1[B]</span></div></div>
+<div class="rule"><h3>Strict 2PL</h3><p>Basic 2PL, plus every <i>exclusive</i> lock is held until the transaction commits or aborts. No other transaction can read or overwrite uncommitted writes, so there are no cascading rollbacks. Deadlock is still possible. (Textbook, 18.1.3)</p>
+<div class="chain v"><span class="mk">✓</span><span class="chip">L1[A] X</span><span class="ar">→</span><span class="chip">W1(A)</span><span class="ar">→</span><span class="chip">Commit1</span><span class="ar">→</span><span class="chip">U1[A]</span></div></div>
+<div class="rule"><h3>Rigorous 2PL</h3><p>Even stricter: <i>all</i> locks, shared and exclusive, are held until commit or abort. Transactions are serializable in the order they commit. Deadlock is still possible. (Textbook, 18.1.3)</p>
+<div class="chain v"><span class="mk">✓</span><span class="chip">L1[A] S</span><span class="ar">→</span><span class="chip">R1(A)</span><span class="ar">→</span><span class="chip">Commit1</span><span class="ar">→</span><span class="chip">U1[A]</span></div></div>
+</div>
+<p class="lead">The lab below runs the same schedule under any of these four variants so you can compare the lock/unlock patterns.</p>
+
+<h3>(ii) and (iii) Schedule lab</h3>
+<p>Type the schedule in time order (top to bottom of your question) as <b>R1(A) W1(A) R2(A)…</b>: R or W, the transaction number, then the item. Reading a column-by-column exam table: go row by row, top to bottom. Lock mode used: S if a transaction only reads an item, X if it ever writes it (this avoids lock upgrades).</p>
+<textarea id="labIn" rows="3" aria-label="Schedule"></textarea>
+<div class="row"><label>2PL variant: <select id="labMode"><option value="basic">Basic 2PL</option><option value="strict">Strict 2PL</option><option value="rigorous">Rigorous 2PL</option><option value="conservative">Conservative 2PL</option></select></label>
+<button class="primary" id="labGo">Analyse</button><button id="labE1">Example: interleaving that is not serializable</button><button id="labE2">Example: serializable interleaving</button></div>
+<div class="out" id="labOut"></div>
+
+<h3>How to write the answer</h3>
+<details class="ans" open><summary>(i) Types of 2PL</summary><p>Define the two phases and the lock point. Then give one line each for basic, conservative, strict and rigorous 2PL (what is held until when, and one advantage and one drawback), with a short L/U example as in the cards above. Close by noting that basic, strict and rigorous 2PL can deadlock; conservative 2PL cannot.</p></details>
+<details class="ans" open><summary>(ii) 2PL ensures conflict-serializability</summary><p>Rewrite the schedule with L<sub>i</sub>[X] before the first use of X and U<sub>i</sub>[X] only after the transaction's lock point. If a request conflicts with a lock held by another transaction, the requester waits, so the schedule is reordered. Then draw the precedence graph: an edge Ti → Tj for each conflicting pair (same item, different transactions, at least one write) where Ti comes first. It has no cycle, so a serial order exists (a topological order). <i>Why it always works:</i> order transactions by lock point. For a conflict on X, the earlier transaction must release X before the later one locks it, and that release is after the earlier lock point, so every edge goes from the earlier lock point to the later one. A cycle would need a lock point earlier than itself, which is impossible.</p></details>
+<details class="ans" open><summary>(iii) Locks without 2PL</summary><p>Show a schedule where each transaction locks and unlocks an item around every operation, so each lock is individually legal, but a transaction unlocks one item before locking another (violating the two-phase rule). Draw the precedence graph of the resulting schedule. Conflicts on one item give Ti → Tj, and conflicts on another item give Tj → Ti, so the graph has a cycle and the schedule is not conflict-serializable.</p></details>
+</section>
+</main>
+<footer>Concepts and terminology follow Silberschatz, Korth &amp; Sudarshan, <i>Database System Concepts</i>, 7th ed., §18.3. Explanations are written for teaching; the “Variant” scenario and the deadlock illustration are not from the book. Records and file placement in the tree are illustrative.</footer>
+
+<script>
+const $=s=>document.querySelector(s);
+const MODES=['IS','IX','S','SIX','X'];
+const CP={IS:{IS:1,IX:1,S:1,SIX:1,X:0},IX:{IS:1,IX:1,S:0,SIX:0,X:0},S:{IS:1,IX:0,S:1,SIX:0,X:0},SIX:{IS:1,IX:0,S:0,SIX:0,X:0},X:{IS:0,IX:0,S:0,SIX:0,X:0}};
+const TX=['T21','T22'],COL={T21:'#1d4e89',T22:'#b4530b'};
+const C={DB:['A1','A2'],A1:['Fa','Fb'],A2:['Fc'],Fa:['ra1','ra2','ra9'],Fb:['rb1','rb2'],Fc:['rc1','rc2']};
+const P={},POS={};let li=0;
+Object.keys(C).forEach(k=>C[k].forEach(c=>P[c]=k));
+(function lay(id,d){if(!C[id]){POS[id]=[60+li++*113,14+d*86];return}
+C[id].forEach(c=>lay(c,d+1));const xs=C[id].map(c=>POS[c][0]);POS[id]=[xs.reduce((a,b)=>a+b)/xs.length,14+d*86]})('DB',0);
+const kind=id=>id==='DB'?'Database':/^A/.test(id)?'Area':/^F/.test(id)?'File':'Record';
+const nm=id=>id==='DB'?'the Database':kind(id)+' '+id;
+const path=id=>{const a=[];for(let x=id;x;x=P[x])a.unshift(x);return a};
+const fresh=()=>({locks:{},shr:{T21:false,T22:false}});
+const lockOf=(st,id,t)=>st.locks[id]&&st.locks[id][t];
+function impl(st,t,id){let r=null;for(let a=P[id];a;a=P[a]){const m=lockOf(st,a,t);if(m==='X')return 'X';if(m==='S'||m==='SIX')r='S'}return r}
+
+const MCOL={IS:'#2E8B57',IX:'#C98A00',S:'#1D4E89',SIX:'#6B3FA0',X:'#B3261E'},RANK={IS:1,IX:2,S:3,SIX:4,X:5};
+function tint(st,id){let best=null;
+TX.forEach(t=>{for(let a=id;a;a=P[a]){const m=lockOf(st,a,t);if(m){const c={m,ex:a===id};if(!best||RANK[c.m]>RANK[best.m]||(RANK[c.m]===RANK[best.m]&&c.ex))best=c;break}}});return best}
+function render(svg,st,sel){
+const pt=sel?path(sel):[];let h='';
+Object.keys(C).forEach(p=>C[p].forEach(c=>{h+=`<line class="e ${pt.includes(c)?'path':''}" x1="${POS[p][0]}" y1="${POS[p][1]+40}" x2="${POS[c][0]}" y2="${POS[c][1]}"/>`}));
+TX.forEach((t,ti)=>Object.keys(POS).forEach(id=>{const m=lockOf(st,id,t);if(!m)return;const sub=[];(function f(n){sub.push(n);(C[n]||[]).forEach(f)})(id);
+const d=path(id).length-1,pad=8+(3-d)*5+ti*3,hw=d===3?44:52,xs=sub.map(n=>POS[n][0]),ys=sub.map(n=>POS[n][1]),x0=Math.min(...xs)-hw-pad,y0=Math.min(...ys)-pad;
+h+=`<rect x="${x0}" y="${y0}" width="${Math.max(...xs)+hw+pad-x0}" height="${Math.max(...ys)+82+pad-y0}" rx="10" style="pointer-events:none;fill:${MCOL[m]};fill-opacity:.07;stroke:${MCOL[m]};stroke-width:2;stroke-dasharray:6 4"/>`+(d<3?`<text x="${x0+6}" y="${y0+11}" font-size="10" font-weight="700" style="fill:${MCOL[m]}">${t} ${m} section</text>`:'')}));
+Object.keys(POS).forEach(id=>{const [x,y]=POS[id],w=id[0]==='r'?84:100;
+const tn=tint(st,id),fs=tn?`style="fill:${MCOL[tn.m]};fill-opacity:${tn.ex?.42:(tn.m==='IS'||tn.m==='IX')?.14:.24};${tn.ex?`stroke:${MCOL[tn.m]};stroke-width:3`:''}"`:'';
+h+=`<g class="n ${pt.includes(id)?'path':''} ${id===sel?'sel':''}" data-id="${id}"><rect ${fs} x="${x-w/2}" y="${y}" width="${w}" height="40" rx="5"/><text class="t1" x="${x}" y="${y+14}" text-anchor="middle">${kind(id)}</text><text class="t2" x="${x}" y="${y+31}" text-anchor="middle">${id==='DB'?'DB':id}</text>`;
+TX.forEach((t,i)=>{const e=lockOf(st,id,t),im=impl(st,t,id);const yy=y+45+i*17;
+if(e)h+=`<g class="pill"><rect x="${x-38}" y="${yy}" width="76" height="15" rx="7" style="fill:${COL[t]};stroke:${COL[t]}"/><text x="${x}" y="${yy+11}" text-anchor="middle" style="font-size:10.5px;fill:#fff;font-weight:700">${t} · ${e}</text></g>`;
+else if(im)h+=`<g class="pill"><rect x="${x-38}" y="${yy}" width="76" height="15" rx="7" style="fill:#fff;stroke:${COL[t]};stroke-dasharray:3 2"/><text x="${x}" y="${yy+11}" text-anchor="middle" style="font-size:10px;fill:${COL[t]};font-weight:700">${t} impl. ${im}</text></g>`});
+h+='</g>'});
+svg.innerHTML=h}
+
+function check(st,t,id,m){const ch=[];let proto=true,clash=true;
+const add=(ok,s,k)=>{ch.push([ok,s]);if(!ok){if(k==='c')clash=false;else proto=false}};
+if(lockOf(st,id,t)){return {ok:false,kind:'reject',ch:[[false,`${t} already holds ${lockOf(st,id,t)} on ${nm(id)}. Release it first; lock upgrades are outside this simulator.`]]}}
+add(!st.shr[t],st.shr[t]?`Rule 5: ${t} has already unlocked a node, so it is shrinking and may not lock anything new.`:`Rule 5: ${t} has not unlocked anything yet (growing phase).`);
+const p=P[id];
+if(!p)add(true,'Rule 2: the root may be locked first, in any mode.');
+else{const pm=lockOf(st,p,t),need=(m==='S'||m==='IS')?['IS','IX']:['IX','SIX'],r=(m==='S'||m==='IS')?3:4;
+add(!!pm&&need.includes(pm),`Rule ${r}: ${m} on ${id} needs the parent ${p} locked by ${t} in ${need.join(' or ')}; ${t} ${pm?'holds '+pm:'holds nothing'} there.`)}
+let any=false;
+TX.forEach(o=>{if(o!==t&&lockOf(st,id,o)){any=true;const hm=lockOf(st,id,o),c=CP[hm][m];add(!!c,`Rule 1: ${o} holds ${hm} on ${id}; held ${hm} vs requested ${m} is ${c?'compatible':'incompatible'}.`,'c')}});
+if(!any)add(true,`Rule 1: no other transaction holds a lock on ${id}.`,'c');
+return {ok:proto&&clash,kind:!proto?'reject':!clash?'wait':'grant',ch}}
+
+function release(st,t,id){const m=lockOf(st,id,t);
+if(!m)return {ok:false,ch:[[false,`${t} holds no lock on ${id}.`]]};
+const kid=(C[id]||[]).filter(k=>lockOf(st,k,t));
+if(kid.length)return {ok:false,ch:[[false,`Rule 6: ${t} still holds a lock on ${kid.join(', ')}, a child of ${id}. Unlock bottom-up.`]]};
+return {ok:true,ch:[[true,`Rule 6: ${t} holds no locks on the children of ${id}.`],[true,`${t} enters its shrinking phase (rule 5): no new locks from now on.`]]}}
+const apply=(st,t,id,m)=>{(st.locks[id]=st.locks[id]||{})[t]=m};
+const drop=(st,t,id)=>{delete st.locks[id][t];st.shr[t]=true};
+
+const list=r=>`<ul>${r.ch.map(c=>`<li class="${c[0]?'p':'f'}">${c[0]?'✓':'✗'} ${c[1]}</li>`).join('')}</ul>`;
+const heldHtml=st=>TX.map(t=>{const a=Object.keys(POS).filter(i=>lockOf(st,i,t)).map(i=>`${i}:${lockOf(st,i,t)}`);
+return `<div class="held"><span class="dot" style="background:${COL[t]}"></span><b>${t}</b> (${st.shr[t]?'shrinking':'growing'}): ${a.join(', ')||'no locks'}</div>`}).join('');
+
+/* Section 1 sandbox */
+let sb,sbSel;
+const sbT=()=>document.querySelector('[name=sbT]:checked').value;
+let sbMode='IX';
+function sbDraw(){render($('#sbTree'),sb,sbSel);$('#sbSel').textContent=sbSel;$('#sbHeld').innerHTML=heldHtml(sb);
+document.querySelectorAll('#sbModes button').forEach(b=>{const on=b.textContent===sbMode;b.style.background=on?MCOL[sbMode]:'';b.style.color=on?'#fff':'';b.style.fontWeight=on?'700':''})}
+function sbInit(){sb=fresh();sbSel='Fa';sbMode='IX';sbDraw();$('#sbMsg').className='msg';$('#sbMsg').textContent='Select a node and a mode. Try locking a record before its parent to see the protocol refuse.'}
+MODES.forEach(m=>{const b=document.createElement('button');b.textContent=m;b.onclick=()=>{sbMode=m;sbDraw()};$('#sbModes').appendChild(b)});
+$('#sbTree').onclick=e=>{const g=e.target.closest('.n');if(g){sbSel=g.dataset.id;sbDraw()}};
+$('#sbAcq').onclick=()=>{const t=sbT(),auto=$('#sbAuto').checked,trial=JSON.parse(JSON.stringify(sb)),steps=[];let pre=null;
+if(auto){const need=(sbMode==='S'||sbMode==='IS')?'IS':'IX',okm=need==='IS'?['IS','IX']:['IX','SIX'];
+for(const a of path(sbSel).slice(0,-1)){const cur=lockOf(trial,a,t);if(cur&&okm.includes(cur))continue;
+if(cur){pre={ok:false,kind:'reject',ch:[[false,`${t} already holds ${cur} on ${a}, which is not enough for ${sbMode} below (lock upgrades are not supported here).`]],tg:`${need} on ${a}`};break}
+const r0=check(trial,t,a,need);if(!r0.ok){pre=r0;pre.tg=`${need} on ${a} (needed first)`;break}apply(trial,t,a,need);steps.push(`${need} on ${a}`)}}
+const r=pre||check(trial,t,sbSel,sbMode),tg=pre?pre.tg:`${sbMode} on ${sbSel}`;
+const head={grant:['ok',`GRANTED: ${t} now holds ${sbMode} on ${sbSel}.`],wait:['wait',`MUST WAIT: ${t}'s ${tg} request conflicts with a lock held by another transaction. Release that lock, then try again.`],reject:['bad',`REFUSED by the protocol: ${t} cannot take ${tg} yet.${auto?'':' Lock the parent first, or tick “Auto-lock ancestors”.'}`]}[r.kind];
+if(r.ok){apply(trial,t,sbSel,sbMode);sb=trial}
+$('#sbMsg').className='msg '+head[0];$('#sbMsg').innerHTML=`<b>${head[1]}</b>`+(r.ok&&steps.length?`<p>Locked top-down first: ${steps.join(', ')}.</p>`:'')+list(r);sbDraw()};
+$('#sbRel').onclick=()=>{const t=sbT(),r=release(sb,t,sbSel);
+if(r.ok)drop(sb,t,sbSel);$('#sbMsg').className='msg '+(r.ok?'ok':'bad');$('#sbMsg').innerHTML=`<b>${r.ok?'RELEASED':'NOT RELEASED'}: ${sbSel} for ${t}.</b>`+list(r);sbDraw()};
+$('#sbReset').onclick=sbInit;
+
+/* Section 2 matrix */
+function why(h,r){if(h==='X'||r==='X')return 'X gives exclusive access to the node and everything beneath it, so no other lock can coexist with it.';
+const k=[h,r].sort().join(),M={
+'IS,IS':'Both only announce S locks lower down. Any real clash is detected at the lower node.',
+'IS,IX':'Intention locks only announce what will be locked lower. A conflict, if any, is caught at the descendant where the real S or X lock is requested.',
+'IS,S':'Neither side writes: IS announces reads below and S reads the subtree.',
+'IS,SIX':'IS only announces reads below. SIX reads the whole subtree and takes X locks only on some descendants, so IS is the one mode that can coexist with it.',
+'IX,IX':'Both announce writers somewhere below, possibly in different parts of the subtree. Real conflicts are caught lower down.',
+'IX,S':'S reads the entire subtree, but IX announces a writer somewhere inside it. A reader of everything cannot share with a writer of part.',
+'IX,SIX':'SIX already reads the whole subtree; an IX holder may write somewhere inside it, which clashes with that shared read.',
+'S,S':'Both only read, so readers can share.',
+'S,SIX':'SIX is an S lock plus an IX intention. Its IX part clashes with the other S.',
+'SIX,SIX':'Each SIX includes an IX part (writers below) and an S part over the whole subtree, so two SIX locks clash.'};return M[k]}
+function mxDraw(){const h=$('#mxH').value,r=$('#mxR').value,ok=CP[h][r];
+document.querySelectorAll('#mx td').forEach(td=>td.classList.toggle('pick',td.dataset.h===h&&td.dataset.r===r));
+$('#mxOut').className='msg '+(ok?'ok':'bad');
+$('#mxOut').innerHTML=`<span class="badge ${ok?'ok':'bad'}">${ok?'Compatible':'Incompatible'}</span> <b>Transaction A holds ${h}; Transaction B requests ${r}, on the same node.</b><br>${ok?'B’s request can be granted as far as this node is concerned.':'B must wait until A releases its lock on this node.'}<br>${why(h,r)}<br><small>Checked on one node, between two different transactions.</small>`}
+(function(){let t='<tr><th>held ↓ / requested →</th>'+MODES.map(m=>`<th>${m}</th>`).join('')+'</tr>';
+MODES.forEach(h=>{t+=`<tr><th>${h}</th>`+MODES.map(r=>`<td class="${CP[h][r]?'y':'x'}" data-h="${h}" data-r="${r}" tabindex="0">${CP[h][r]?'✓':'✗'}</td>`).join('')+'</tr>'});
+$('#mx').innerHTML=t;
+['#mxH','#mxR'].forEach(s=>{$(s).innerHTML=MODES.map(m=>`<option>${m}</option>`).join('');$(s).onchange=mxDraw});
+$('#mxH').value='IX';$('#mxR').value='S';
+$('#mx').onclick=e=>{const td=e.target.closest('td');if(td){$('#mxH').value=td.dataset.h;$('#mxR').value=td.dataset.r;mxDraw()}};
+$('#mx').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.target.click()}};mxDraw()})();
+
+/* Section 3 demo */
+const pre=[['T21','L','DB','IS'],['T21','L','A1','IS'],['T21','L','Fa','IS'],['T21','L','ra2','S'],['T22','L','DB','IX'],['T22','L','A1','IX'],['T22','L','Fa','IX']];
+const u=(t,a)=>a.map(i=>[t,'U',i]);
+const SC={A:[...pre,['T22','L','ra9','X'],...u('T21',['ra2','Fa','A1','DB']),...u('T22',['ra9','Fa','A1','DB'])],
+B:[...pre,['T22','L','ra2','X'],...u('T21',['ra2','Fa','A1','DB']),['T22','L','ra2','X'],...u('T22',['ra2','Fa','A1','DB'])]};
+const MEAN={S:'S (shared) lets it read this node and, implicitly, everything below it.',X:'X (exclusive) lets it read and write this node and, implicitly, everything below it.',IS:'IS says: “I intend to take S locks on some descendants.”',IX:'IX says: “I intend to take S or X locks on some descendants.”',SIX:'SIX means S on the whole subtree plus intent to take X locks on some descendants.'};
+let dk=0,timer=null;
+function replay(k){const st=fresh();let last=null;
+for(let i=0;i<k;i++){const [t,a,id,m]=SC[$('#dmSc').value][i];
+if(a==='L'){last=check(st,t,id,m);if(last.ok)apply(st,t,id,m)}else{last=release(st,t,id);if(last.ok)drop(st,t,id)}}
+return {st,last}}
+function dmDraw(){const S=SC[$('#dmSc').value],{st,last}=replay(dk);
+const cur=dk?S[dk-1]:null;render($('#dmTree'),st,cur?cur[2]:null);
+$('#dmHeld').innerHTML=heldHtml(st);$('#dmCount').textContent=`Step ${dk} of ${S.length}`;
+$('#dmBack').disabled=dk===0;$('#dmStep').disabled=dk===S.length;$('#dmTeach').classList.remove('on');
+const box=$('#dmMsg');
+if(!cur){box.className='msg';box.innerHTML='Press <b>Step</b> to begin. Locks are requested root first, leaf last.';return}
+const [t,a,id,m]=cur;
+if(a==='L'){const b={grant:['ok','GRANTED'],wait:['wait','MUST WAIT'],reject:['bad','REFUSED']}[last.kind];
+box.className='msg '+b[0];box.innerHTML=`<span class="badge ${b[0]}">${b[1]}</span> <b>${t} requests ${m} on ${nm(id)}</b>`+list(last)+(last.kind==='wait'?`<div>${t} holds its intention locks and waits. Nothing is lost; it can retry once the conflicting lock is gone.</div>`:'')}
+else{box.className='msg ok';box.innerHTML=`<span class="badge ok">RELEASED</span> <b>${t} unlocks ${nm(id)}</b>`+list(last)}
+if(dk===S.length&&dmTimerStop)dmTimerStop()}
+function dmExplain(){const [t,a,id,m]=SC[$('#dmSc').value][dk-1]||[];const {last}=replay(dk);let s;
+if(!t)s='Nothing has happened yet. Each transaction will lock from the top of the tree down to the data it needs.';
+else if(a==='U')s=`${t} is finished with ${nm(id)} and gives the lock back. Releases go from the leaf upward, because a parent’s lock must stay until its children are unlocked (rule 6). After this first release, ${t} may never lock anything new (rule 5).`;
+else if(last.kind==='wait')s=`${t} wants ${m} on ${id}, but another transaction already has a clashing lock on this very node. Only locks on the same node are compared here. ${t} has to wait until that lock is released.`;
+else{const why=id===(SC[$('#dmSc').value].find(x=>x[0]===t&&x[1]==='L'&&!C[x[2]])||[])[2];
+s=`${t} ${why?`needs the actual data, so it takes ${m} on the ${kind(id).toLowerCase()}.`:`is on its way down the tree and leaves a warning on ${id}.`} ${MEAN[m]} The parent was already locked in a suitable mode, and no other transaction holds a clashing lock on this node.`+(m==='IX'||m==='IS'?` Intention locks of this kind are compatible with each other, which is why T21 and T22 can work in the same file together.`:'')}
+const el=$('#dmTeach');el.innerHTML='<b>In plain words.</b> '+s;el.classList.add('on')}
+function dmTimerStop(){clearInterval(timer);timer=null;$('#dmAuto').textContent='Autoplay'}
+$('#dmStep').onclick=()=>{if(dk<SC[$('#dmSc').value].length){dk++;dmDraw()}};
+$('#dmBack').onclick=()=>{if(dk>0){dk--;dmDraw()}};
+$('#dmReset').onclick=()=>{dmTimerStop();dk=0;dmDraw()};
+$('#dmSc').onchange=()=>$('#dmReset').click();
+$('#dmExplain').onclick=dmExplain;
+$('#dmAuto').onclick=()=>{if(timer){dmTimerStop();return}
+if(dk>=SC[$('#dmSc').value].length)dk=0;$('#dmAuto').textContent='Pause';
+const go=()=>{if(dk<SC[$('#dmSc').value].length){dk++;dmDraw()}else dmTimerStop()};go();if(timer===null)timer=setInterval(go,1600)};
+
+/* Section 4 rules */
+const RULES=[
+['Rule 1','Follow the lock-compatibility matrix. A request is granted only if it is compatible with every lock other transactions hold on that node.',['T21 Fa:IS > T22 Fa:IX'],['T21 Fa:S > T22 Fa:IX']],
+['Rule 2','Lock the root first; any mode is allowed there.',['DB:IX > A1:IX'],['Fa:IS before DB is locked']],
+['Rule 3','Lock a node in S or IS only if its parent is currently locked by the same transaction in IX or IS.',['Fa:IS > ra2:S'],['ra2:S while Fa is not locked']],
+['Rule 4','Lock a node in X, SIX or IX only if its parent is currently locked by the same transaction in IX or SIX.',['Fa:IX > ra9:X'],['Fa:IS > ra9:X']],
+['Rule 5','Lock a node only if you have not unlocked any node before (two-phase).',['lock DB > lock Fa > unlock Fa'],['unlock Fa > lock ra9']],
+['Rule 6','Unlock a node only if you currently hold no locks on any of its children.',['unlock ra9 > unlock Fa'],['unlock Fa while ra9 is still locked']]];
+const ch=s=>s.split(' > ').map(x=>`<span class="chip">${x}</span>`).join('<span class="ar">→</span>');
+$('#rules').innerHTML=RULES.map(r=>`<div class="rule"><h3>${r[0]}</h3><p>${r[1]}</p>${r[2].map(x=>`<div class="chain v"><span class="mk">✓</span>${ch(x)}</div>`).join('')}${r[3].map(x=>`<div class="chain i"><span class="mk">✗</span>${ch(x)}</div>`).join('')}</div>`).join('');
+const CH=[['DB','IX'],['A1','IX'],['Fa','IX'],['ra9','X']];let cl,cs;
+function chDraw(msg,cls){$('#chBoxes').innerHTML=CH.map((c,i)=>`<div class="box ${i<cl?'lk':''}"><small>${c[0]}</small><br><b>${i<cl?c[1]:'—'}</b></div>`).join('');
+$('#chMark').style.left=cs?(100-cl*12.5)+'%':(cl*12.5)+'%';
+if(msg){$('#chMsg').className='msg '+cls;$('#chMsg').innerHTML=msg}}
+function chInit(){cl=0;cs=false;chDraw('Press “Lock next” to begin.','')}
+$('#chL').onclick=()=>{if(cs)return chDraw('<b>Refused (rule 5).</b> A lock was already released, so this transaction is shrinking and cannot lock anything new.','bad');
+if(cl===CH.length)return chDraw('All four nodes are locked. Now try “Unlock deepest”.','');
+const c=CH[cl],p=cl?CH[cl-1]:null;cl++;chDraw(`<b>Granted.</b> ${c[0]} locked in ${c[1]}.${p?` Parent ${p[0]} was already locked in ${p[1]} (rule ${c[1]==='X'?4:4}).`:' The root may be locked in any mode (rule 2).'}`,'ok')};
+$('#chU').onclick=()=>{if(!cl)return chDraw('Nothing to unlock.','');const c=CH[cl-1];cl--;cs=true;chDraw(`<b>Released.</b> ${c[0]} unlocked first because it is the deepest (rule 6). The transaction is now shrinking (rule 5).`,'ok')};
+$('#chR').onclick=chInit;
+
+/* Exam lab */
+const parse=s=>{const o=[],re=/([rRwW])\s*(\d+)\s*[\(\[]\s*(\w+)\s*[\)\]]/g;let m;while(m=re.exec(s))o.push({k:m[1].toUpperCase(),t:+m[2],x:m[3].toUpperCase(),i:o.length});return o};
+const otx=o=>`${o.k}${o.t}(${o.x})`;
+function graph(ops){const E={};
+for(let i=0;i<ops.length;i++)for(let j=i+1;j<ops.length;j++){const a=ops[i],b=ops[j];
+if(a.t!==b.t&&a.x===b.x&&(a.k==='W'||b.k==='W')){const k=a.t+'>'+b.t;(E[k]=E[k]||{f:a.t,to:b.t,d:[]}).d.push(otx(a)+' → '+otx(b))}}
+const nodes=[...new Set(ops.map(o=>o.t))].sort((a,b)=>a-b),E2=Object.values(E),deg={};nodes.forEach(t=>deg[t]=0);E2.forEach(e=>deg[e.to]++);
+const order=[],q=nodes.filter(t=>!deg[t]);while(q.length){const t=q.shift();order.push(t);E2.filter(e=>e.f===t).forEach(e=>{if(--deg[e.to]===0)q.push(e.to)})}
+return {nodes,E:E2,order,cyc:order.length<nodes.length}}
+function svgG(g){const n=g.nodes.length,W=300,H=200,cx=W/2,cy=H/2,r=n>1?70:0,P={};
+g.nodes.forEach((t,i)=>{const a=-Math.PI/2+i*2*Math.PI/n;P[t]=[cx+r*Math.cos(a),cy+r*Math.sin(a)]});
+let h=`<svg viewBox="0 0 ${W} ${H}" style="min-width:0;max-width:300px" role="img" aria-label="Precedence graph"><defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" fill="#1f2a44"/></marker></defs>`;
+g.E.forEach(e=>{const [x1,y1]=P[e.f],[x2,y2]=P[e.to];let dx=x2-x1,dy=y2-y1;const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;const px=-dy,py=dx,
+mx=(x1+x2)/2+px*24,my=(y1+y2)/2+py*24;
+h+=`<path d="M${x1+dx*20} ${y1+dy*20}Q${mx} ${my} ${x2-dx*22} ${y2-dy*22}" fill="none" stroke="#1f2a44" stroke-width="1.8" marker-end="url(#ah)"/><text x="${mx+px*9}" y="${my+py*9+4}" font-size="11" text-anchor="middle" fill="#7a1f2b">${[...new Set(e.d.map(s=>s.match(/\((\w+)\)/)[1]))].join(',')}</text>`});
+g.nodes.forEach(t=>{h+=`<circle cx="${P[t][0]}" cy="${P[t][1]}" r="18" fill="#e8eefb" stroke="#1f2a44" stroke-width="2"/><text x="${P[t][0]}" y="${P[t][1]+5}" text-anchor="middle" font-size="13" font-weight="700" fill="#1b2233">T${t}</text>`});
+return h+'</svg>'}
+const verdict=g=>g.cyc?`<div class="msg bad"><b>Cycle in the precedence graph → NOT conflict-serializable.</b></div>`:`<div class="msg ok"><b>No cycle → conflict-serializable.</b> Equivalent serial order: ${g.order.map(t=>'T'+t).join(' → ')}</div>`;
+const edges=g=>g.E.length?`<ul>${g.E.map(e=>`<li>T${e.f} → T${e.to}: ${e.d.join(', ')}</li>`).join('')}</ul>`:'<p>No conflicting pairs.</p>';
+function tbl(rows,T){return `<table class="sch"><tr><th>#</th>${T.map(t=>`<th>T${t}</th>`).join('')}</tr>${rows.map((r,i)=>`<tr><td>${i+1}</td>${T.map(t=>`<td>${t===r.t?`<span class="${r.c}">${r.s}</span>`:''}</td>`).join('')}</tr>`).join('')}</table>`}
+const gview=(g,extra)=>`<div class="flex"><div>${svgG(g)}</div><div>${verdict(g)}${edges(g)}${extra||''}</div></div>`;
+
+function run2pl(ops,mode){
+const T=[...new Set(ops.map(o=>o.t))].sort((a,b)=>a-b),st={},L={},rows=[];
+T.forEach(t=>{const mine=ops.filter(o=>o.t===t),need={},last={};mine.forEach((o,i)=>{need[o.x]=(need[o.x]==='X'||o.k==='W')?'X':'S';last[o.x]=i});st[t]={mine,need,last,nn:Object.keys(need).length,p:0,held:{},cnt:0,started:false,wait:null,done:false}});
+const can=(t,x,m)=>Object.keys(L[x]||{}).every(o=>+o===t||(L[x][o]==='S'&&m==='S'));
+const lockRow=(t,x)=>{const s=st[t];(L[x]=L[x]||{})[t]=s.need[x];s.held[x]=1;s.cnt++;rows.push({t,s:`L${t}[${x}] <small>(${s.need[x]})</small>`+(s.cnt===s.nn?' ◂ lock point':''),c:'lk'})};
+const unl=(t,x)=>{delete L[x][t];delete st[t].held[x];rows.push({t,s:`U${t}[${x}]`,c:'un'})};
+const release=(t,fin)=>{const s=st[t];if(!fin&&s.cnt<s.nn)return;
+Object.keys(s.held).forEach(x=>{if(!fin){if(mode==='rigorous')return;if(mode==='strict'&&s.need[x]==='X')return;if(s.last[x]>=s.p)return}unl(t,x)})};
+let g=0;
+while(T.some(t=>!st[t].done)&&g++<500){
+const cand=T.filter(t=>!st[t].done).sort((a,b)=>st[a].mine[st[a].p].i-st[b].mine[st[b].p].i);let prog=false;
+for(const t of cand){const s=st[t],o=s.mine[s.p];
+if(mode==='conservative'&&!s.started){const xs=Object.keys(s.need);
+if(!xs.every(x=>can(t,x,s.need[x]))){if(!s.wait){rows.push({t,s:'waits: needs all its locks at once',c:'wt'});s.wait=1}continue}
+xs.forEach(x=>lockRow(t,x));s.started=true}
+if(!s.held[o.x]){if(!can(t,o.x,s.need[o.x])){if(s.wait!==o.x){rows.push({t,s:`waits for L${t}[${o.x}]`,c:'wt'});s.wait=o.x}continue}lockRow(t,o.x)}
+s.wait=null;rows.push({t,s:otx(o),c:'op',o});s.p++;
+if(s.p===s.mine.length){const cm={t,s:`Commit${t}`,c:'cm'};if(mode==='strict'||mode==='rigorous'){rows.push(cm);release(t,true)}else{release(t,true);rows.push(cm)}s.done=true}else release(t,false);
+prog=true;break}
+if(!prog){rows.push({t:cand[0],s:'DEADLOCK: every remaining transaction is waiting',c:'wt'});break}}
+return {rows,T,ops:rows.filter(r=>r.o).map(r=>r.o)}}
+
+const MN={basic:'Basic',strict:'Strict',rigorous:'Rigorous',conservative:'Conservative'};
+function analyse(){const ops=parse($('#labIn').value),out=$('#labOut');
+if(ops.length<2||new Set(ops.map(o=>o.t)).size<2){out.innerHTML='<div class="msg bad">Enter at least two transactions, e.g. R1(A) W1(A) R2(A) W2(A).</div>';return}
+const mode=$('#labMode').value,T=[...new Set(ops.map(o=>o.t))].sort((a,b)=>a-b),g0=graph(ops);
+let h=`<h4>Given schedule: precedence graph</h4><p>${ops.map(otx).join(' ')}</p>`+gview(g0);
+const r=run2pl(ops,mode),g1=graph(r.ops);
+const okp=T.every(t=>{const idx=r.rows.map((x,i)=>[x,i]).filter(([x])=>x.t===t);const lastL=Math.max(-1,...idx.filter(([x])=>x.c==='lk').map(a=>a[1])),firstU=Math.min(1e9,...idx.filter(([x])=>x.c==='un').map(a=>a[1]));return lastL<firstU});
+h+=`<h4>(ii) The same transactions under ${MN[mode]} 2PL</h4><div class="flex"><div>${tbl(r.rows,T)}</div><div><p>${okp?'✓ In every transaction all locks come before the first unlock (two-phase).':'✗ Two-phase property violated.'} “waits” rows show a request blocked by a conflicting lock held by another transaction, so the schedule is reordered.</p><p><b>Resulting schedule:</b> ${r.ops.map(otx).join(' ')}</p></div></div>`+gview(g1);
+const rows=[];ops.forEach(o=>{const m=o.k==='R'?'S':'X';rows.push({t:o.t,s:`L${o.t}[${o.x}] <small>(${m})</small>`,c:'lk'},{t:o.t,s:otx(o),c:'op'},{t:o.t,s:`U${o.t}[${o.x}]`,c:'un'})});
+h+=`<h4>(iii) Locks without 2PL: unlock right after each operation</h4><p>Every lock is legal at the moment it is taken (nobody else holds it), but each transaction unlocks an item and later locks another one, so it is not two-phase.</p><div class="flex"><div>${tbl(rows,T)}</div></div>`+gview(g0,g0.cyc?'<p>Because the locks give no protection across operations, the interleaving above runs unchanged and its graph has a cycle.</p>':'<p>This particular interleaving happens to be serializable. Locking without 2PL only fails for some interleavings; try the first example.</p>');
+out.innerHTML=h}
+const EX={labE1:'R1(A) W1(A) R2(A) W2(A) R2(B) W2(B) R1(B) W1(B)',labE2:'R1(A) W1(A) R2(A) W2(A) R1(B) W1(B) R2(B) W2(B)'};
+Object.keys(EX).forEach(k=>$('#'+k).onclick=()=>{$('#labIn').value=EX[k];analyse()});
+$('#labGo').onclick=analyse;$('#labMode').onchange=analyse;
+function labInit(){$('#labIn').value=EX.labE1;$('#labOut').innerHTML='';$('#labMode').value='basic'}
+
+function resetAll(){sbInit();dmTimerStop();dk=0;dmDraw();chInit();labInit()}
+$('#resetAll').onclick=resetAll;resetAll();
+</script>
+</body>
+</html>
